@@ -148,7 +148,7 @@ static kop_error parse_http_request(int sock, kop_http_request *req) {
     return ERR_OUT_OF_MEMORY;
   }
 
-  strlcpy(body, buf, body_len);
+  strlcpy(body, buf, body_len + 1);
 
   req->body_len = body_len;
   req->body = body;
