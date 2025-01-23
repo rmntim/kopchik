@@ -1,37 +1,15 @@
 #include "server.h"
 #include "http.h"
+#include "utils.h"
 #include <assert.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <stdbool.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
-
-static kop_error kop_handlers_init(kop_handlers *handlers) {
-  // TODO: custom initial cap?
-  handlers->cap = 4;
-
-  void *bytes = malloc(sizeof(kop_handler) * handlers->cap);
-  if (bytes == NULL) {
-    return ERR_OUT_OF_MEMORY;
-  }
-
-  handlers->data = bytes;
-  handlers->len = 0;
-
-  return NOERROR;
-}
-
-static void kop_handlers_deinit(kop_handlers *handlers) {
-  free(handlers->data);
-  handlers->cap = 0;
-  handlers->len = 0;
-  handlers->data = NULL;
-}
 
 static int kop_server_init(uint16_t port) {
   int sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -68,12 +46,20 @@ kop_error kop_server_new(kop_server *s, uint16_t port) {
   s->sock_fd = sock;
   s->port = port;
 
-  kop_error err = kop_handlers_init(&s->handlers);
-  if (err != NOERROR) {
-    return err;
-  }
+  kop_vector_init(kop_handler, s->handlers);
 
   return NOERROR;
+}
+
+static const char *find_header_or_default(kop_http_request *req,
+                                          const char *header, const char *def) {
+  for (size_t i = 0; i < req->headers.len; i++) {
+    if (strcmp(req->headers.data[i].header, header) == 0) {
+      return req->headers.data[i].value;
+    }
+  }
+
+  return def;
 }
 
 static kop_error parse_http_request(int sock, kop_http_request *req) {
@@ -117,17 +103,48 @@ static kop_error parse_http_request(int sock, kop_http_request *req) {
 
   buf += 1;
 
-  if (strncmp(buf, "\r\n", 2) != 0) {
-    free(req_path);
-    return ERR_HEADERS;
+  kop_http_headers headers = {0};
+  kop_vector_init(kop_http_header, headers);
+
+  while (strncmp(buf, "\r\n", 2) != 0) {
+    const char *header_key = strsep(&buf, ":");
+
+    for (; *buf != '\0' && *buf != '\r' && *buf == ' '; ++buf)
+      ;
+
+    if (*buf == '\0' || *buf == '\r') {
+      free(req_path);
+      kop_vector_free(headers);
+      return ERR_MALFORMED_HEADER;
+    }
+
+    const char *value = strsep(&buf, "\r\n");
+    buf += 1;
+
+    kop_http_header header =
+        (kop_http_header){.header = header_key, .value = value};
+
+    kop_vector_append(kop_http_header, headers, header);
   }
+
+  req->headers = headers;
 
   buf += 2;
 
-  size_t body_len = buf_arr + sizeof(buf_arr) - 1 - buf;
-  char *body = malloc(body_len);
+  size_t remaining_buf_len = buf_arr + sizeof(buf_arr) - 1 - buf;
+
+  const char *content_length_str =
+      find_header_or_default(req, "Content-Length", "0");
+  uint64_t body_len = strtoll(content_length_str, NULL, 10);
+
+  if (body_len >= remaining_buf_len) {
+    assert(0 && "buf too smol :(");
+  }
+
+  char *body = malloc(body_len + 1);
   if (body == NULL) {
     free(req_path);
+    kop_vector_free(headers);
     return ERR_OUT_OF_MEMORY;
   }
 
@@ -142,6 +159,7 @@ static kop_error parse_http_request(int sock, kop_http_request *req) {
 static void kop_http_request_free(kop_http_request *req) {
   free((void *)req->body);
   free((void *)req->path);
+  kop_vector_free(req->headers);
   req->body_len = 0;
   req->path = 0;
 }
@@ -152,6 +170,11 @@ static kop_error kop_handle_client(kop_server *s, int client_sock) {
   if ((err = parse_http_request(client_sock, &req)) != NOERROR) {
     return err;
   }
+
+  KOP_DEBUG_LOG("got client with method '%s'",
+                KOP_HTTP_METHOD_TO_STR(req.method));
+  KOP_DEBUG_LOG("                path '%s'", req.path);
+  KOP_DEBUG_LOG("                body(len=%zu) '%s'", req.body_len, req.body);
 
   for (size_t i = 0; i < s->handlers.len; i++) {
     kop_handler handler = s->handlers.data[i];
@@ -170,6 +193,8 @@ static kop_error kop_handle_client(kop_server *s, int client_sock) {
   }
 
   kop_http_request_free(&req);
+
+  KOP_DEBUG_LOG("client disconnect %d", client_sock);
 
   return NOERROR;
 }
@@ -217,7 +242,7 @@ void kop_server_delete(kop_server *s) {
   close(s->sock_fd);
   s->sock_fd = 0;
 
-  kop_handlers_deinit(&s->handlers);
+  kop_vector_free(s->handlers);
 }
 
 void kop_get(kop_server *s, const char *path, kop_handler_func handler) {
