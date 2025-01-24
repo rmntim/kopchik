@@ -123,22 +123,68 @@ static kop_error parse_http_request(int sock, kop_http_request *req) {
   kop_vector_init(kop_http_header, headers);
 
   while (strncmp(buf, "\r\n", 2) != 0) {
-    const char *header_key = strsep(&buf, ":");
+    const char *tmp_header_key = strsep(&buf, ":");
+    char *header_key = strdup(tmp_header_key);
+    if (header_key == NULL) {
+      free((void *)path);
+      kop_vector_free(headers);
+      return ERR_OUT_OF_MEMORY;
+    }
+
+    while (buf == NULL) {
+      ssize_t n = recv(sock, buf_arr, sizeof(buf_arr) - 1, 0);
+      if (n < 0) {
+        free(header_key);
+        free((void *)path);
+        kop_vector_free(headers);
+        return ERR_READING_DATA;
+      }
+      buf_arr[n] = '\0';
+      buf = buf_arr;
+
+      tmp_header_key = strsep(&buf, ":");
+      strcat(header_key, tmp_header_key);
+    }
 
     for (; *buf != '\0' && *buf != '\r' && *buf == ' '; ++buf)
       ;
 
     if (*buf == '\0' || *buf == '\r') {
       free((void *)path);
+      free(header_key);
       kop_vector_free(headers);
       return ERR_MALFORMED_HEADER;
     }
 
-    const char *value = strsep(&buf, "\r\n");
+    const char *tmp_header_value = strsep(&buf, "\r\n");
+    char *header_value = strdup(tmp_header_value);
+    if (header_value == NULL) {
+      free((void *)path);
+      free(header_key);
+      kop_vector_free(headers);
+      return ERR_OUT_OF_MEMORY;
+    }
+
+    while (buf == NULL) {
+      ssize_t n = recv(sock, buf_arr, sizeof(buf_arr) - 1, 0);
+      if (n < 0) {
+        free(header_key);
+        free(header_value);
+        free((void *)path);
+        kop_vector_free(headers);
+        return ERR_READING_DATA;
+      }
+      buf_arr[n] = '\0';
+      buf = buf_arr;
+
+      tmp_header_value = strsep(&buf, "\r\n");
+      strcat(header_value, tmp_header_value);
+    }
+
     buf += 1;
 
     kop_http_header header =
-        (kop_http_header){.header = header_key, .value = value};
+        (kop_http_header){.header = header_key, .value = header_value};
 
     kop_vector_append(kop_http_header, headers, header);
   }
@@ -189,6 +235,11 @@ static kop_error kop_handle_client(kop_server *s, int client_sock) {
 
   KOP_DEBUG_LOG("got client with method '%s'",
                 KOP_HTTP_METHOD_TO_STR(req.method));
+
+  kop_vector_foreach(kop_http_header, req.headers, header) {
+    KOP_DEBUG_LOG("                %s : %s", header->header, header->value);
+  }
+
   KOP_DEBUG_LOG("                path '%s'", req.path);
   KOP_DEBUG_LOG("                body(len=%zu) '%s'", req.body_len, req.body);
 

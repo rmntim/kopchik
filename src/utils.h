@@ -29,6 +29,9 @@
     (vptr).data[(vptr).len++] = value;                                         \
   } while (0)
 
+#define kop_vector_foreach(type, vptr, it)                                     \
+  for (type *it = (vptr).data; it < (vptr).data + (vptr).len; ++it)
+
 #define kop_vector_free(v)                                                     \
   do {                                                                         \
     free(v.data);                                                              \
