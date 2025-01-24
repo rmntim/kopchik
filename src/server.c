@@ -86,18 +86,16 @@ static kop_error parse_http_request(int sock, kop_http_request *req) {
   }
 
   const char *path = strsep(&buf, " ");
-  size_t path_len = strlen(path) + 1;
-  char *req_path = malloc(path_len);
+  const char *req_path = strdup(path);
   if (req_path == NULL) {
     return ERR_OUT_OF_MEMORY;
   }
 
-  strlcpy(req_path, path, path_len);
   req->path = req_path;
 
   const char *http_version = strsep(&buf, "\r\n");
   if (strncmp(http_version, "HTTP/1.1", sizeof("HTTP/1.1") - 1) != 0) {
-    free(req_path);
+    free((void *)req_path);
     return ERR_UNSUPPORTED_HTTP_VERSION;
   }
 
@@ -113,7 +111,7 @@ static kop_error parse_http_request(int sock, kop_http_request *req) {
       ;
 
     if (*buf == '\0' || *buf == '\r') {
-      free(req_path);
+      free((void *)req_path);
       kop_vector_free(headers);
       return ERR_MALFORMED_HEADER;
     }
@@ -143,7 +141,7 @@ static kop_error parse_http_request(int sock, kop_http_request *req) {
 
   char *body = malloc(body_len + 1);
   if (body == NULL) {
-    free(req_path);
+    free((void *)req_path);
     kop_vector_free(headers);
     return ERR_OUT_OF_MEMORY;
   }
