@@ -72,18 +72,16 @@ static kop_error parse_http_request(int sock, kop_http_request *req) {
   }
 
   const char *method = strsep(&buf, " ");
-
-  if (KOP_IS_HTTP_METHOD(method, "GET")) {
-    req->method = HTTP_GET;
-  } else if (KOP_IS_HTTP_METHOD(method, "POST")) {
-    req->method = HTTP_POST;
-  } else if (KOP_IS_HTTP_METHOD(method, "PUT")) {
-    req->method = HTTP_PUT;
-  } else if (KOP_IS_HTTP_METHOD(method, "DELETE")) {
-    req->method = HTTP_DELETE;
-  } else {
-    return ERR_PARSING_REQ;
+  if (buf == NULL) {
+    return ERR_MALFORMED_METHOD;
   }
+
+  kop_http_method http_method = kop_http_method_from_str(method);
+  if (http_method == HTTP_BAD_METHOD) {
+    return ERR_MALFORMED_METHOD;
+  }
+
+  req->method = http_method;
 
   const char *path = strsep(&buf, " ");
   const char *req_path = strdup(path);

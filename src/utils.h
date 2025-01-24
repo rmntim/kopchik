@@ -1,6 +1,18 @@
 #ifndef KOP_UTILS_H_
 #define KOP_UTILS_H_
 
+#include <stdio.h>
+
+#ifdef KOP_DEBUG
+#define KOP_DEBUG_LOG(msg, ...)                                                \
+  do {                                                                         \
+    fprintf(stderr, "[DEBUG] %s:%d " msg "\n", __FILE__, __LINE__,             \
+            __VA_ARGS__);                                                      \
+  } while (0)
+#else
+#define KOP_DEBUG_LOG(msg, ...)
+#endif
+
 #define kop_vector_init(type, v)                                               \
   do {                                                                         \
     v.len = 0;                                                                 \

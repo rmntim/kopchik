@@ -6,19 +6,6 @@
 
 #include "http.h"
 
-#ifdef KOP_DEBUG
-#define KOP_DEBUG_LOG(msg, ...)                                                \
-  do {                                                                         \
-    fprintf(stderr, "[DEBUG] %s:%d " msg "\n", __FILE__, __LINE__,             \
-            __VA_ARGS__);                                                      \
-  } while (0)
-#else
-#define KOP_DEBUG_LOG(msg, ...)
-#endif
-
-#define KOP_IS_HTTP_METHOD(buf, method)                                        \
-  strncmp((buf), (method), sizeof((method)) - 1) == 0
-
 typedef enum kop_error {
   NOERROR = 0,
   ERR_CREATING_SOCKET,
@@ -32,6 +19,7 @@ typedef enum kop_error {
   ERR_HEADERS,
   ERR_INVALID_BODY,
   ERR_MALFORMED_HEADER,
+  ERR_MALFORMED_METHOD,
 } kop_error;
 
 static const char *kop_error_str[] = {
@@ -47,6 +35,7 @@ static const char *kop_error_str[] = {
     [ERR_HEADERS] = "ERR_HEADERS",
     [ERR_INVALID_BODY] = "ERR_INVALID_BODY",
     [ERR_MALFORMED_HEADER] = "ERR_MALFORMED_HEADER",
+    [ERR_MALFORMED_METHOD] = "ERR_MALFORMED_METHOD",
 };
 
 #define KOP_STRERROR(err) kop_error_str[err]

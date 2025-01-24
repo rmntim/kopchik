@@ -1,9 +1,12 @@
 #include "server.h"
-#include <stdio.h>
+#include "utils.h"
 
 #define PORT 8000
 
-void sample_get(kop_context ctx) { KOP_DEBUG_LOG("get handler %s", ""); }
+void sample_get(kop_context ctx) {
+  (void)ctx;
+  KOP_DEBUG_LOG("get handler %s", "");
+}
 
 int main(void) {
   kop_server s;
