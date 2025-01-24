@@ -1,6 +1,7 @@
 #include "server.h"
 #include "http.h"
 #include "utils.h"
+#include <errno.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <signal.h>
@@ -219,14 +220,37 @@ static kop_error parse_http_request(int sock, kop_http_request *req) {
       find_header_or_default(req, "Content-Length", "0");
   uint64_t body_len = strtoll(content_length_str, NULL, 10);
 
-  char *body = malloc(body_len + 1);
+  if (body_len == 0) {
+    req->body_len = body_len;
+    req->body = strdup("");
+
+    return NOERROR;
+  }
+
+  char *body = strdup(buf);
   if (body == NULL) {
     free((void *)path);
     kop_headers_free(headers);
     return ERR_OUT_OF_MEMORY;
   }
 
-  strlcpy(body, buf, body_len + 1);
+  while (strlen(body) < body_len) {
+    ssize_t n = recv(sock, buf_arr, sizeof(buf_arr) - 1, 0);
+    if (n < 0) {
+      free((void *)path);
+      free(body);
+      kop_headers_free(headers);
+      if (errno == EAGAIN) {
+        return ERR_TIMEOUT;
+      }
+      return ERR_READING_DATA;
+    }
+
+    buf_arr[n] = '\0';
+    buf = buf_arr;
+
+    strcat(body, buf);
+  }
 
   req->body_len = body_len;
   req->body = body;
@@ -297,6 +321,12 @@ kop_error kop_server_run(kop_server *s) {
     if (client_sock < 0) {
       return ERR_ACCEPTING;
     }
+
+    struct timeval tv = (struct timeval){
+        .tv_sec = 5,
+        .tv_usec = 0,
+    };
+    setsockopt(client_sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
 #ifdef DEBUG
     char name[INET_ADDRSTRLEN];
