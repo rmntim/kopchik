@@ -16,11 +16,11 @@ int main(void) {
     return -1;
   }
 
+  kop_get(&s, "/foo/bar", sample_get);
+
   int ret = 0;
 
   KOP_DEBUG_LOG("starting server on %d", PORT);
-
-  kop_get(&s, "/foo/bar", sample_get);
 
   if (kop_server_run(&s) != NOERROR) {
     perror("server run");

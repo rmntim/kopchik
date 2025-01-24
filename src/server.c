@@ -1,9 +1,9 @@
 #include "server.h"
 #include "http.h"
 #include "utils.h"
-#include <assert.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -37,6 +37,15 @@ static int kop_server_init(uint16_t port) {
   return sock;
 }
 
+// HACK: idek might kms later because of this
+volatile static bool gStop = false;
+
+static void kop_server_shutdown(int sig) {
+  KOP_DEBUG_LOG("received signal %s", strsignal(sig));
+  (void)sig;
+  gStop = true;
+}
+
 kop_error kop_server_new(kop_server *s, uint16_t port) {
   int sock = kop_server_init(port);
   if (sock < 0) {
@@ -47,6 +56,9 @@ kop_error kop_server_new(kop_server *s, uint16_t port) {
   s->port = port;
 
   kop_vector_init(kop_handler, s->handlers);
+
+  s->shutdown = kop_server_shutdown;
+  signal(SIGINT, s->shutdown);
 
   return NOERROR;
 }
@@ -275,10 +287,9 @@ kop_error kop_server_run(kop_server *s) {
     return ERR_LISTENING;
   }
 
-  bool stop = false;
   int server_sock = s->sock_fd;
 
-  while (!stop) {
+  while (!gStop) {
     struct sockaddr client_addr = {0};
     socklen_t client_addr_size = 0;
 

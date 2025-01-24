@@ -1,6 +1,7 @@
 #ifndef KOP_SERVER_H_
 #define KOP_SERVER_H_
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -70,10 +71,13 @@ typedef struct kop_handlers {
   size_t len;
 } kop_handlers;
 
+typedef void (*shutdown_func)(int);
+
 typedef struct kop_server {
   int sock_fd;
   uint16_t port;
   kop_handlers handlers;
+  shutdown_func shutdown;
 } kop_server;
 
 kop_error kop_server_new(kop_server *s, uint16_t port);
