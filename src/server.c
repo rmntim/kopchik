@@ -87,6 +87,9 @@ static kop_error parse_http_request(int sock, kop_http_request *req) {
 
   const char *tmp_path = strsep(&buf, " ");
   char *path = strdup(tmp_path);
+  if (path == NULL) {
+    return ERR_OUT_OF_MEMORY;
+  }
 
   while (buf == NULL) {
     ssize_t n = recv(sock, buf_arr, sizeof(buf_arr) - 1, 0);
@@ -104,7 +107,12 @@ static kop_error parse_http_request(int sock, kop_http_request *req) {
   req->path = path;
 
   const char *http_version = strsep(&buf, "\r\n");
-  if (strncmp(http_version, "HTTP/1.1", sizeof("HTTP/1.1") - 1) != 0) {
+  if (buf == NULL) {
+    free((void *)path);
+    return ERR_MALFORMED_HTTP_VERSION;
+  }
+
+  if (strncmp(http_version, "HTTP/1.1", strlen("HTTP/1.1")) != 0) {
     free((void *)path);
     return ERR_UNSUPPORTED_HTTP_VERSION;
   }

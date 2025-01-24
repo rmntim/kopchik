@@ -20,6 +20,7 @@ typedef enum kop_error {
   ERR_INVALID_BODY,
   ERR_MALFORMED_HEADER,
   ERR_MALFORMED_METHOD,
+  ERR_MALFORMED_HTTP_VERSION
 } kop_error;
 
 static const char *kop_error_str[] = {
@@ -36,6 +37,7 @@ static const char *kop_error_str[] = {
     [ERR_INVALID_BODY] = "ERR_INVALID_BODY",
     [ERR_MALFORMED_HEADER] = "ERR_MALFORMED_HEADER",
     [ERR_MALFORMED_METHOD] = "ERR_MALFORMED_METHOD",
+    [ERR_MALFORMED_HTTP_VERSION] = "ERR_MALFORMED_HTTP_VERSION",
 };
 
 #define KOP_STRERROR(err) kop_error_str[err]
