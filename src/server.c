@@ -63,13 +63,15 @@ static const char *find_header_or_default(kop_http_request *req,
 }
 
 static kop_error parse_http_request(int sock, kop_http_request *req) {
-  char buf_arr[4096];
+  static char buf_arr[4096 + 1];
   char *buf = buf_arr;
 
-  ssize_t n = recv(sock, buf, sizeof(buf_arr), 0);
+  ssize_t n = recv(sock, buf, sizeof(buf_arr) - 1, 0);
   if (n < 0) {
     return ERR_READING_DATA;
   }
+
+  buf_arr[n] = '\0';
 
   const char *method = strsep(&buf, " ");
   if (buf == NULL) {
@@ -83,17 +85,27 @@ static kop_error parse_http_request(int sock, kop_http_request *req) {
 
   req->method = http_method;
 
-  const char *path = strsep(&buf, " ");
-  const char *req_path = strdup(path);
-  if (req_path == NULL) {
-    return ERR_OUT_OF_MEMORY;
+  const char *tmp_path = strsep(&buf, " ");
+  char *path = strdup(tmp_path);
+
+  while (buf == NULL) {
+    ssize_t n = recv(sock, buf_arr, sizeof(buf_arr) - 1, 0);
+    if (n < 0) {
+      free(path);
+      return ERR_READING_DATA;
+    }
+    buf_arr[n] = '\0';
+    buf = buf_arr;
+
+    tmp_path = strsep(&buf, " ");
+    strcat(path, tmp_path);
   }
 
-  req->path = req_path;
+  req->path = path;
 
   const char *http_version = strsep(&buf, "\r\n");
   if (strncmp(http_version, "HTTP/1.1", sizeof("HTTP/1.1") - 1) != 0) {
-    free((void *)req_path);
+    free((void *)path);
     return ERR_UNSUPPORTED_HTTP_VERSION;
   }
 
@@ -109,7 +121,7 @@ static kop_error parse_http_request(int sock, kop_http_request *req) {
       ;
 
     if (*buf == '\0' || *buf == '\r') {
-      free((void *)req_path);
+      free((void *)path);
       kop_vector_free(headers);
       return ERR_MALFORMED_HEADER;
     }
@@ -139,7 +151,7 @@ static kop_error parse_http_request(int sock, kop_http_request *req) {
 
   char *body = malloc(body_len + 1);
   if (body == NULL) {
-    free((void *)req_path);
+    free((void *)path);
     kop_vector_free(headers);
     return ERR_OUT_OF_MEMORY;
   }
