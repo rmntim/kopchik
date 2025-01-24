@@ -62,6 +62,16 @@ static const char *find_header_or_default(kop_http_request *req,
   return def;
 }
 
+#define kop_headers_free(headers)                                              \
+  do {                                                                         \
+    kop_vector_foreach(kop_http_header, headers, header) {                     \
+      free((void *)header->header);                                            \
+      free((void *)header->value);                                             \
+    }                                                                          \
+                                                                               \
+    kop_vector_free(headers);                                                  \
+  } while (0)
+
 static kop_error parse_http_request(int sock, kop_http_request *req) {
   static char buf_arr[4096 + 1];
   char *buf = buf_arr;
@@ -127,7 +137,7 @@ static kop_error parse_http_request(int sock, kop_http_request *req) {
     char *header_key = strdup(tmp_header_key);
     if (header_key == NULL) {
       free((void *)path);
-      kop_vector_free(headers);
+      kop_headers_free(headers);
       return ERR_OUT_OF_MEMORY;
     }
 
@@ -136,7 +146,7 @@ static kop_error parse_http_request(int sock, kop_http_request *req) {
       if (n < 0) {
         free(header_key);
         free((void *)path);
-        kop_vector_free(headers);
+        kop_headers_free(headers);
         return ERR_READING_DATA;
       }
       buf_arr[n] = '\0';
@@ -152,7 +162,7 @@ static kop_error parse_http_request(int sock, kop_http_request *req) {
     if (*buf == '\0' || *buf == '\r') {
       free((void *)path);
       free(header_key);
-      kop_vector_free(headers);
+      kop_headers_free(headers);
       return ERR_MALFORMED_HEADER;
     }
 
@@ -161,7 +171,7 @@ static kop_error parse_http_request(int sock, kop_http_request *req) {
     if (header_value == NULL) {
       free((void *)path);
       free(header_key);
-      kop_vector_free(headers);
+      kop_headers_free(headers);
       return ERR_OUT_OF_MEMORY;
     }
 
@@ -171,7 +181,7 @@ static kop_error parse_http_request(int sock, kop_http_request *req) {
         free(header_key);
         free(header_value);
         free((void *)path);
-        kop_vector_free(headers);
+        kop_headers_free(headers);
         return ERR_READING_DATA;
       }
       buf_arr[n] = '\0';
@@ -193,20 +203,14 @@ static kop_error parse_http_request(int sock, kop_http_request *req) {
 
   buf += 2;
 
-  size_t remaining_buf_len = buf_arr + sizeof(buf_arr) - 1 - buf;
-
   const char *content_length_str =
       find_header_or_default(req, "Content-Length", "0");
   uint64_t body_len = strtoll(content_length_str, NULL, 10);
 
-  if (body_len >= remaining_buf_len) {
-    assert(0 && "buf too smol :(");
-  }
-
   char *body = malloc(body_len + 1);
   if (body == NULL) {
     free((void *)path);
-    kop_vector_free(headers);
+    kop_headers_free(headers);
     return ERR_OUT_OF_MEMORY;
   }
 
@@ -221,7 +225,7 @@ static kop_error parse_http_request(int sock, kop_http_request *req) {
 static void kop_http_request_free(kop_http_request *req) {
   free((void *)req->body);
   free((void *)req->path);
-  kop_vector_free(req->headers);
+  kop_headers_free(req->headers);
   req->body_len = 0;
   req->path = 0;
 }
