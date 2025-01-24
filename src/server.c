@@ -243,30 +243,43 @@ void kop_server_delete(kop_server *s) {
   kop_vector_free(s->handlers);
 }
 
-void kop_get(kop_server *s, const char *path, kop_handler_func handler) {
-  (void)s;
-  (void)path;
-  (void)handler;
-  assert(0 && "kop_get unimplemented");
+void kop_get(kop_server *s, const char *path, kop_handler_func handler_func) {
+  kop_handler handler = (kop_handler){
+      .method = HTTP_GET,
+      .path = path,
+      .handler = handler_func,
+  };
+
+  kop_vector_append(kop_handler, s->handlers, handler);
 }
 
-void kop_post(kop_server *s, const char *path, kop_handler_func handler) {
-  (void)s;
-  (void)path;
-  (void)handler;
-  assert(0 && "kop_post unimplemented");
+void kop_post(kop_server *s, const char *path, kop_handler_func handler_func) {
+  kop_handler handler = (kop_handler){
+      .method = HTTP_POST,
+      .path = path,
+      .handler = handler_func,
+  };
+
+  kop_vector_append(kop_handler, s->handlers, handler);
 }
 
-void kop_put(kop_server *s, const char *path, kop_handler_func handler) {
-  (void)s;
-  (void)path;
-  (void)handler;
-  assert(0 && "kop_put unimplemented");
+void kop_put(kop_server *s, const char *path, kop_handler_func handler_func) {
+  kop_handler handler = (kop_handler){
+      .method = HTTP_PUT,
+      .path = path,
+      .handler = handler_func,
+  };
+
+  kop_vector_append(kop_handler, s->handlers, handler);
 }
 
-void kop_delete(kop_server *s, const char *path, kop_handler_func handler) {
-  (void)s;
-  (void)path;
-  (void)handler;
-  assert(0 && "kop_delete unimplemented");
+void kop_delete(kop_server *s, const char *path,
+                kop_handler_func handler_func) {
+  kop_handler handler = (kop_handler){
+      .method = HTTP_DELETE,
+      .path = path,
+      .handler = handler_func,
+  };
+
+  kop_vector_append(kop_handler, s->handlers, handler);
 }

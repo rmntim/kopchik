@@ -17,7 +17,7 @@ make -Cbuild
 
 - [x] parse request line
 - [x] parse headers
-- [ ] add handlers
+- [x] add handlers
 - [ ] cli args
 - [ ] dynamically allocate memory for request body
 - [ ] switch to async sockets (epoll, kqueue) (libuv???)
