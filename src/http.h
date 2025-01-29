@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <string.h>
 
+#include "utils.h"
+
 #define KOP_HTTP_METHOD_TO_STR(method) kop_http_method_str[method]
 
 struct kop_context;
@@ -37,18 +39,6 @@ static const char *kop_http_method_str[] = {
     [HTTP_DELETE] = "DELETE",
 };
 
-static inline kop_http_method kop_http_method_from_str(const char *buf) {
-  for (size_t i = 0; i < kop_http_method_count; ++i) {
-    const char *method = kop_http_method_str[i];
-
-    if (strncmp(buf, method, strlen(method)) == 0) {
-      return i;
-    }
-  }
-
-  return HTTP_BAD_METHOD;
-}
-
 typedef enum kop_http_code {
   HTTP_OK = 200,
   HTTP_INTERNAL_SERVER_ERROR = 500,
@@ -67,5 +57,42 @@ typedef struct kop_http_response {
   char *body;
   size_t body_len;
 } kop_http_response;
+
+static inline kop_http_method kop_http_method_from_str(const char *buf) {
+  for (size_t i = 0; i < kop_http_method_count; ++i) {
+    const char *method = kop_http_method_str[i];
+
+    if (strncmp(buf, method, strlen(method)) == 0) {
+      return i;
+    }
+  }
+
+  return HTTP_BAD_METHOD;
+}
+
+static inline const char *find_header_or_default(kop_http_request *req,
+                                                 const char *header,
+                                                 const char *def) {
+  for (size_t i = 0; i < req->headers.len; i++) {
+    if (strcmp(req->headers.data[i].header, header) == 0) {
+      return req->headers.data[i].value;
+    }
+  }
+
+  return def;
+}
+
+#define kop_headers_free(headers)                                              \
+  do {                                                                         \
+    kop_vector_foreach(kop_http_header, headers, header) {                     \
+      free((void *)header->header);                                            \
+      free((void *)header->value);                                             \
+    }                                                                          \
+                                                                               \
+    kop_vector_free(headers);                                                  \
+  } while (0)
+
+kop_error parse_http_request(int sock, kop_http_request *req);
+void kop_http_request_free(kop_http_request *req);
 
 #endif // !KOP_HTTP_H_
