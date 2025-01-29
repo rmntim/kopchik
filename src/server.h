@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #include "http.h"
+#include "queue.h"
 #include "utils.h"
 
 struct kop_server;
@@ -43,6 +44,7 @@ typedef struct kop_server {
   uint16_t port;
   kop_handlers handlers;
   shutdown_func shutdown;
+  kop_queue queue;
 } kop_server;
 
 kop_error kop_server_new(kop_server *s, uint16_t port);

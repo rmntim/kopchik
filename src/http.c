@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <errno.h>
 #include <netinet/in.h>
 #include <stdlib.h>
@@ -13,7 +14,11 @@ void kop_http_request_free(kop_http_request *req) {
 }
 
 kop_error parse_http_request(int sock, kop_http_request *req) {
-  static char buf_arr[4096 + 1];
+  // TODO: migrate to async proccessing
+
+  assert(0 && "parse_http_request is synchronous");
+
+  char buf_arr[4096 + 1];
   char *buf = buf_arr;
 
   ssize_t n = recv(sock, buf, sizeof(buf_arr) - 1, 0);

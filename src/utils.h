@@ -3,6 +3,12 @@
 
 #include <stdio.h>
 
+#if defined(__linux__)
+#define KOP_LINUX
+#elif defined(BSD) || defined(__APPLE__)
+#define KOP_BSD
+#endif
+
 #ifdef KOP_DEBUG
 #define KOP_DEBUG_LOG(msg, ...)                                                \
   do {                                                                         \
@@ -57,6 +63,11 @@ typedef enum kop_error {
   ERR_MALFORMED_HTTP_VERSION,
   ERR_MALFORMED_BODY,
   ERR_TIMEOUT,
+  ERR_NONBLOCKING,
+  ERR_CREATING_QUEUE,
+  ERR_QUEUE_WAIT,
+  ERR_QUEUE_ADD_CLIENT,
+  ERR_DEAD_SERVER,
 } kop_error;
 
 static const char *kop_error_str[] = {
@@ -76,6 +87,11 @@ static const char *kop_error_str[] = {
     [ERR_MALFORMED_HTTP_VERSION] = "ERR_MALFORMED_HTTP_VERSION",
     [ERR_MALFORMED_BODY] = "ERR_MALFORMED_BODY",
     [ERR_TIMEOUT] = "ERR_TIMEOUT",
+    [ERR_NONBLOCKING] = "ERR_NONBLOCKING",
+    [ERR_CREATING_QUEUE] = "ERR_CREATING_QUEUE",
+    [ERR_QUEUE_WAIT] = "ERR_QUEUE_WAIT",
+    [ERR_QUEUE_ADD_CLIENT] = "ERR_QUEUE_ADD_CLIENT",
+    [ERR_DEAD_SERVER] = "ERR_DEAD_SERVER",
 };
 
 #define KOP_STRERROR(err) kop_error_str[err]
