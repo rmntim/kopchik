@@ -1,9 +1,13 @@
 #include <assert.h>
 #include <errno.h>
 #include <netinet/in.h>
+#include <stdbool.h>
 #include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 #include "http.h"
+#include "utils.h"
 
 void kop_http_request_free(kop_http_request *req) {
   free((void *)req->body);
@@ -13,28 +17,66 @@ void kop_http_request_free(kop_http_request *req) {
   req->path = 0;
 }
 
+static kop_error read_data(int sock, char **buf, size_t *n) {
+  const size_t BUF_SIZE = 4096;
+  char tmp_buf[BUF_SIZE];
+  bool first = true;
+
+  for (;;) {
+    ssize_t nbytes = read(sock, tmp_buf, BUF_SIZE - 1);
+    if (nbytes < 0) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        KOP_DEBUG_LOG("finished reading data from client%s", "");
+        break;
+      } else {
+        return ERR_READING_DATA;
+      }
+    } else if (nbytes == 0) {
+      KOP_DEBUG_LOG("finished with %d", sock);
+      break;
+    }
+    tmp_buf[nbytes] = '\0';
+
+    if (first) {
+      *buf = strdup(tmp_buf);
+      assert(*buf && "ur ram is dead");
+      first = false;
+    } else {
+      *buf = realloc(*buf, *n + nbytes);
+      assert(*buf && "ur ram is dead");
+      strcat(*buf, tmp_buf);
+    }
+
+    *n += nbytes;
+  }
+
+  return NOERROR;
+}
+
 kop_error parse_http_request(int sock, kop_http_request *req) {
-  // TODO: migrate to async proccessing
+  char *buf = 0;
+  size_t n = 0;
 
-  assert(0 && "parse_http_request is synchronous");
-
-  char buf_arr[4096 + 1];
-  char *buf = buf_arr;
-
-  ssize_t n = recv(sock, buf, sizeof(buf_arr) - 1, 0);
-  if (n < 0) {
+  if (read_data(sock, &buf, &n) != NOERROR) {
+    free(buf);
     return ERR_READING_DATA;
   }
 
-  buf_arr[n] = '\0';
+  if (buf == NULL || n == 0) {
+    return ERR_READING_DATA;
+  }
+
+  void *defer_buf = buf;
 
   const char *method = strsep(&buf, " ");
   if (buf == NULL) {
+    free(defer_buf);
     return ERR_MALFORMED_METHOD;
   }
 
   kop_http_method http_method = kop_http_method_from_str(method);
   if (http_method == HTTP_BAD_METHOD) {
+    free(defer_buf);
     return ERR_MALFORMED_METHOD;
   }
 
@@ -43,32 +85,22 @@ kop_error parse_http_request(int sock, kop_http_request *req) {
   const char *tmp_path = strsep(&buf, " ");
   char *path = strdup(tmp_path);
   if (path == NULL) {
+    free(defer_buf);
     return ERR_OUT_OF_MEMORY;
-  }
-
-  while (buf == NULL) {
-    ssize_t n = recv(sock, buf_arr, sizeof(buf_arr) - 1, 0);
-    if (n < 0) {
-      free(path);
-      return ERR_READING_DATA;
-    }
-    buf_arr[n] = '\0';
-    buf = buf_arr;
-
-    tmp_path = strsep(&buf, " ");
-    strcat(path, tmp_path);
   }
 
   req->path = path;
 
   const char *http_version = strsep(&buf, "\r\n");
   if (buf == NULL) {
+    free(defer_buf);
     free((void *)path);
     return ERR_MALFORMED_HTTP_VERSION;
   }
 
   if (strncmp(http_version, "HTTP/1.1", strlen("HTTP/1.1")) != 0) {
     free((void *)path);
+    free(defer_buf);
     return ERR_UNSUPPORTED_HTTP_VERSION;
   }
 
@@ -82,23 +114,9 @@ kop_error parse_http_request(int sock, kop_http_request *req) {
     char *header_key = strdup(tmp_header_key);
     if (header_key == NULL) {
       free((void *)path);
+      free(defer_buf);
       kop_headers_free(headers);
       return ERR_OUT_OF_MEMORY;
-    }
-
-    while (buf == NULL) {
-      ssize_t n = recv(sock, buf_arr, sizeof(buf_arr) - 1, 0);
-      if (n < 0) {
-        free(header_key);
-        free((void *)path);
-        kop_headers_free(headers);
-        return ERR_READING_DATA;
-      }
-      buf_arr[n] = '\0';
-      buf = buf_arr;
-
-      tmp_header_key = strsep(&buf, ":");
-      strcat(header_key, tmp_header_key);
     }
 
     for (; *buf != '\0' && *buf != '\r' && *buf == ' '; ++buf)
@@ -106,6 +124,7 @@ kop_error parse_http_request(int sock, kop_http_request *req) {
 
     if (*buf == '\0' || *buf == '\r') {
       free((void *)path);
+      free(defer_buf);
       free(header_key);
       kop_headers_free(headers);
       return ERR_MALFORMED_HEADER;
@@ -115,25 +134,10 @@ kop_error parse_http_request(int sock, kop_http_request *req) {
     char *header_value = strdup(tmp_header_value);
     if (header_value == NULL) {
       free((void *)path);
+      free(defer_buf);
       free(header_key);
       kop_headers_free(headers);
       return ERR_OUT_OF_MEMORY;
-    }
-
-    while (buf == NULL) {
-      ssize_t n = recv(sock, buf_arr, sizeof(buf_arr) - 1, 0);
-      if (n < 0) {
-        free(header_key);
-        free(header_value);
-        free((void *)path);
-        kop_headers_free(headers);
-        return ERR_READING_DATA;
-      }
-      buf_arr[n] = '\0';
-      buf = buf_arr;
-
-      tmp_header_value = strsep(&buf, "\r\n");
-      strcat(header_value, tmp_header_value);
     }
 
     buf += 1;
@@ -162,27 +166,19 @@ kop_error parse_http_request(int sock, kop_http_request *req) {
   char *body = strdup(buf);
   if (body == NULL) {
     free((void *)path);
+    free(defer_buf);
     kop_headers_free(headers);
     return ERR_OUT_OF_MEMORY;
   }
 
-  while (strlen(body) < body_len) {
-    ssize_t n = recv(sock, buf_arr, sizeof(buf_arr) - 1, 0);
-    if (n < 0) {
-      free((void *)path);
-      free(body);
-      kop_headers_free(headers);
-      if (errno == EAGAIN) {
-        return ERR_TIMEOUT;
-      }
-      return ERR_READING_DATA;
-    }
-
-    buf_arr[n] = '\0';
-    buf = buf_arr;
-
-    strcat(body, buf);
+  if (body + body_len > (char *)defer_buf + n) {
+    free((void *)path);
+    free(defer_buf);
+    kop_headers_free(headers);
+    return ERR_MALFORMED_BODY;
   }
+
+  body[body_len] = '\0';
 
   req->body_len = body_len;
   req->body = body;

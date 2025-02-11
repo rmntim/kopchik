@@ -194,54 +194,19 @@ kop_error kop_server_run(kop_server *s) {
         }
       } else {
         // a client socket
-        err = kop_handle_client(s, kop_queue_event_get_sock(event));
+        int client_sock = kop_queue_event_get_sock(event);
+        err = kop_handle_client(s, client_sock);
         if (err != NOERROR) {
           KOP_DEBUG_LOG("error handling client: %s", KOP_STRERROR(err));
-          continue;
         }
+        close(client_sock);
       }
     }
 
-    goto all_good;
-
+    continue;
   server_dead:
     err = ERR_DEAD_SERVER;
     gStop = true;
-
-  all_good:
-
-    /*    struct sockaddr client_addr = {0};*/
-    /*    socklen_t client_addr_size = 0;*/
-    /**/
-    /*    int client_sock = accept(server_sock, &client_addr,
-     * &client_addr_size);*/
-    /*    if (client_sock < 0) {*/
-    /*      return ERR_ACCEPTING;*/
-    /*    }*/
-    /**/
-    /*    struct timeval tv = (struct timeval){*/
-    /*        .tv_sec = 5,*/
-    /*        .tv_usec = 0,*/
-    /*    };*/
-    /*    setsockopt(client_sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));*/
-    /**/
-    /*#ifdef DEBUG*/
-    /*    char name[INET_ADDRSTRLEN];*/
-    /*    char port[10];*/
-    /*    getnameinfo(&client_addr, client_addr_size, name, sizeof(name),
-     * port,*/
-    /*                sizeof(port), NI_NUMERICHOST | NI_NUMERICSERV);*/
-    /**/
-    /*    DEBUG_LOG("got client %s:%s", name, port);*/
-    /*#endif*/
-    /**/
-    /*    kop_error err = kop_handle_client(s, client_sock);*/
-    /*    if (err != NOERROR) {*/
-    /*      KOP_DEBUG_LOG("error while handling client %s",
-     * KOP_STRERROR(err));*/
-    /*    }*/
-    /**/
-    /*    close(client_sock);*/
   }
 
   return err;
